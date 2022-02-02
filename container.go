@@ -1,6 +1,7 @@
 package refdep
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 )
@@ -25,15 +26,24 @@ func (c *Container) Add(fn interface{}) error {
 	rets := val.Call([]reflect.Value{})
 	for _, ret := range rets {
 		if ret.Kind() == reflect.Pointer {
-			if ret.IsNil() {
-				continue
-			}
-
 			ret = ret.Elem()
 		}
 
-		if ret.Kind() != reflect.Struct {
+		switch ret.Kind() {
+		case reflect.Struct, reflect.Interface:
+		default:
 			continue
+		}
+
+		if ret.Kind() == reflect.Interface {
+			if err, ok := ret.Interface().(error); ok {
+				if err != nil {
+					return err
+				}
+				continue
+			}
+
+			return errors.New("only struct allowed")
 		}
 
 		name := ret.Type().PkgPath() + nameGlue + ret.Type().Name()
