@@ -16,39 +16,62 @@ func New() *Container {
 
 const nameGlue = "."
 
-func (c *Container) Add(fn interface{}) error {
+func (c *Container) Add(name string, fn interface{}, deps ...string) error {
 	ref := reflect.TypeOf(fn)
 	val := reflect.ValueOf(fn)
 	if ref.Kind() != reflect.Func {
 		return fmt.Errorf("only functions allowed")
 	}
 
-	rets := val.Call([]reflect.Value{})
-	for _, ret := range rets {
-		if ret.Kind() == reflect.Pointer {
-			ret = ret.Elem()
-		}
+	if ref.NumOut() < 1 || ref.NumOut() > 2 {
+		return fmt.Errorf("function signature can only consist of 1 or 2 return values")
+	}
 
-		switch ret.Kind() {
-		case reflect.Struct, reflect.Interface:
-		default:
-			continue
-		}
+	ins, err := c.replaceIn(fn, deps...)
+	if err != nil {
+		return err
+	}
 
-		if ret.Kind() == reflect.Interface {
-			if err, ok := ret.Interface().(error); ok {
-				if err != nil {
-					return err
-				}
-				continue
-			}
+	rets := val.Call(ins)
+	c.dependencies[name] = rets[0].Interface()
+	if ref.NumOut() == 1 {
+		return nil
+	}
 
-			return errors.New("only struct allowed")
-		}
+	if rets[1].Kind() != reflect.Interface {
+		return errors.New("second parameter can only be an error")
+	}
 
-		name := ret.Type().PkgPath() + nameGlue + ret.Type().Name()
-		c.dependencies[name] = ret.Interface()
+	if err, ok := rets[1].Interface().(error); ok && err != nil {
+		return err
 	}
 
 	return nil
+}
+
+func (c *Container) replaceIn(fn interface{}, deps ...string) ([]reflect.Value, error) {
+	ref := reflect.TypeOf(fn)
+	if ref.NumIn() != len(deps) {
+		const msg = "function parameter count do not match dep count, parameters: %d, deps: %d"
+		return []reflect.Value{}, fmt.Errorf(msg, ref.NumIn(), len(deps))
+	}
+
+	if ref.NumIn() == 0 {
+		return []reflect.Value{}, nil
+	}
+
+	ins := make([]reflect.Value, ref.NumIn())
+	for i := 0; i < ref.NumIn(); i++ {
+		val, ok := c.dependencies[deps[i]]
+		if !ok {
+			return []reflect.Value{}, fmt.Errorf("dependecy %s is not initialized", deps[i])
+		}
+
+		param := ref.In(i)
+		p := reflect.New(param)
+		p.Elem().Set(reflect.ValueOf(val))
+		ins[i] = p
+	}
+
+	return ins, nil
 }

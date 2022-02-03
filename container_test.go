@@ -11,10 +11,11 @@ type Foo struct {
 }
 
 func TestContainer_Add(t *testing.T) {
+	const fooName = "foo"
 	t.Run("return value with pointer", func(t *testing.T) {
 		c := New()
 		foo := Foo{Bar: "baz"}
-		err := c.Add(func() *Foo {
+		err := c.Add(fooName, func() *Foo {
 			return &foo
 		})
 
@@ -22,7 +23,7 @@ func TestContainer_Add(t *testing.T) {
 			t.Errorf("error is not expected, but got %s", err)
 		}
 
-		if !reflect.DeepEqual(c.dependencies["refdep"+nameGlue+"Foo"], foo) {
+		if !reflect.DeepEqual(c.dependencies[fooName], &foo) {
 			t.Errorf("expected Foo dependency to be the same as stored")
 		}
 	})
@@ -30,7 +31,7 @@ func TestContainer_Add(t *testing.T) {
 	t.Run("return value without pointer", func(t *testing.T) {
 		c := New()
 		foo := Foo{Bar: "baz"}
-		err := c.Add(func() Foo {
+		err := c.Add(fooName, func() Foo {
 			return foo
 		})
 
@@ -38,7 +39,7 @@ func TestContainer_Add(t *testing.T) {
 			t.Errorf("error is not expected, but got %s", err)
 		}
 
-		if !reflect.DeepEqual(c.dependencies["refdep"+nameGlue+"Foo"], foo) {
+		if !reflect.DeepEqual(c.dependencies[fooName], foo) {
 			t.Errorf("expected Foo dependency to be the same as stored")
 		}
 	})
@@ -46,7 +47,7 @@ func TestContainer_Add(t *testing.T) {
 	t.Run("return value is nil error", func(t *testing.T) {
 		c := New()
 		foo := Foo{Bar: "baz"}
-		err := c.Add(func() (Foo, error) {
+		err := c.Add(fooName, func() (Foo, error) {
 			return foo, nil
 		})
 
@@ -54,19 +55,63 @@ func TestContainer_Add(t *testing.T) {
 			t.Errorf("error is not expected, but got %s", err)
 		}
 
-		if !reflect.DeepEqual(c.dependencies["refdep"+nameGlue+"Foo"], foo) {
+		if !reflect.DeepEqual(c.dependencies[fooName], foo) {
 			t.Errorf("expected Foo dependency to be the same as stored")
 		}
 	})
 
 	t.Run("return value consists an error", func(t *testing.T) {
 		c := New()
-		err := c.Add(func() (*Foo, error) {
+		err := c.Add(fooName, func() (*Foo, error) {
 			return nil, errors.New("unexpected error")
 		})
 
 		if err == nil {
 			t.Error("expected error, but got nil")
+		}
+	})
+
+	t.Run("return dependency without the error", func(t *testing.T) {
+		c := New()
+		foo := Foo{Bar: "baz"}
+		err := c.Add(fooName, func() *Foo {
+			return &foo
+		})
+
+		if err != nil {
+			t.Errorf("error is not expected, but got %s", err)
+		}
+
+		if !reflect.DeepEqual(c.dependencies[fooName], &foo) {
+			t.Errorf("expected Foo dependency to be the same as stored")
+		}
+	})
+}
+
+func TestContainer_replaceIn(t *testing.T) {
+	const fooName = "foo"
+	t.Run("replace single parameter", func(t *testing.T) {
+		c := Container{dependencies: map[string]interface{}{
+			fooName: Foo{Bar: "baz"},
+		}}
+
+		ins, err := c.replaceIn(func(f Foo) {}, fooName)
+		if err != nil {
+			t.Errorf("unexpected error, got %s", err)
+		}
+
+		if len(ins) != 1 {
+			t.Errorf("expected 1 reflect.Value parameter in slice, but got %d", len(ins))
+		}
+
+	})
+
+	t.Run("dependency do not exist", func(t *testing.T) {
+		c := Container{dependencies: map[string]interface{}{}}
+
+		_, err := c.replaceIn(func(f Foo) {}, fooName)
+		if err == nil {
+			t.Errorf("expected to return an error, got nil")
 		}
 	})
 }
