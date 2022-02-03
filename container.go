@@ -6,34 +6,40 @@ import (
 	"reflect"
 )
 
+type dependencies map[string]reflect.Value
+
 type Container struct {
-	dependencies map[string]interface{}
+	dependencies dependencies
 }
 
 func New() *Container {
-	return &Container{dependencies: make(map[string]interface{})}
+	return &Container{dependencies: make(dependencies)}
 }
 
-const nameGlue = "."
+func (c *Container) Inject(name string, injector interface{}, deps ...string) error {
+	if _, ok := c.dependencies[name]; ok {
+		return fmt.Errorf("dependency name %q is already reserved", name)
+	}
 
-func (c *Container) Add(name string, fn interface{}, deps ...string) error {
-	ref := reflect.TypeOf(fn)
-	val := reflect.ValueOf(fn)
+	ref := reflect.TypeOf(injector)
+	val := reflect.ValueOf(injector)
+
 	if ref.Kind() != reflect.Func {
-		return fmt.Errorf("only functions allowed")
+		c.dependencies[name] = val
+		return nil
 	}
 
 	if ref.NumOut() < 1 || ref.NumOut() > 2 {
 		return fmt.Errorf("function signature can only consist of 1 or 2 return values")
 	}
 
-	ins, err := c.replaceIn(fn, deps...)
+	ins, err := c.in(injector, deps...)
 	if err != nil {
 		return err
 	}
 
 	rets := val.Call(ins)
-	c.dependencies[name] = rets[0].Interface()
+	c.dependencies[name] = rets[0]
 	if ref.NumOut() == 1 {
 		return nil
 	}
@@ -49,7 +55,16 @@ func (c *Container) Add(name string, fn interface{}, deps ...string) error {
 	return nil
 }
 
-func (c *Container) replaceIn(fn interface{}, deps ...string) ([]reflect.Value, error) {
+func (c *Container) Eject(name string) (interface{}, error) {
+	val, ok := c.dependencies[name]
+	if !ok {
+		return nil, fmt.Errorf("dependency do not exist with name %q", name)
+	}
+
+	return val.Interface(), nil
+}
+
+func (c *Container) in(fn interface{}, deps ...string) ([]reflect.Value, error) {
 	ref := reflect.TypeOf(fn)
 	if ref.NumIn() != len(deps) {
 		const msg = "function parameter count do not match dep count, parameters: %d, deps: %d"
@@ -69,7 +84,13 @@ func (c *Container) replaceIn(fn interface{}, deps ...string) ([]reflect.Value, 
 
 		param := ref.In(i)
 		p := reflect.New(param)
-		p.Elem().Set(reflect.ValueOf(val))
+
+		switch p.Kind() {
+		case reflect.Pointer, reflect.Interface:
+			p = p.Elem()
+		}
+
+		p.Set(val)
 		ins[i] = p
 	}
 
