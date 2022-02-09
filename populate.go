@@ -6,9 +6,9 @@ import (
 	"reflect"
 )
 
-const tagName = "refdep"
+const tagName = "di"
 
-func (c *Container) Populate(v interface{}, deps ...string) error {
+func (c *Container) Populate(v interface{}) error {
 	tref := reflect.TypeOf(v)
 	if tref.Kind() != reflect.Pointer {
 		return errors.New("given parameter must be a pointer")
@@ -20,22 +20,7 @@ func (c *Container) Populate(v interface{}, deps ...string) error {
 		return c.populateStruct(vref, tref)
 	}
 
-	if tref.Kind() == reflect.Func {
-		return errors.New("func not yet implemented")
-	}
-
-	val, ok := c.dependencies[refval]
-	if !ok {
-		return fmt.Errorf("dependency %q is not injected", refval)
-	}
-
-	if !vref.CanSet() {
-		return fmt.Errorf("unable to set field %q", tref.Field(i).Name)
-	}
-
-	vref.Set(val)
-
-	return nil
+	return errors.New("not yet implemented")
 }
 
 func (c *Container) populateStruct(vref reflect.Value, tref reflect.Type) error {

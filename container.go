@@ -39,7 +39,6 @@ func (c *Container) Inject(name string, injector interface{}, deps ...string) er
 	}
 
 	rets := val.Call(ins)
-
 	c.dependencies[name] = rets[0]
 	if ref.NumOut() == 1 {
 		return nil

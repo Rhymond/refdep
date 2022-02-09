@@ -11,14 +11,12 @@ func TestContainer_Populate(t *testing.T) {
 	}
 
 	type foo struct {
-		Bar string `refdep:"bar"`
+		Bar string `di:"bar"`
 	}
 
 	type unexportedFoo struct {
-		bar string `refdep:"bar"`
+		bar string `di:"bar"`
 	}
-
-	var str string
 
 	tests := []struct {
 		name   string
@@ -49,7 +47,7 @@ func TestContainer_Populate(t *testing.T) {
 		{
 			name: "missing dependecy",
 			v: &struct {
-				Foo string `refdep:"foo"`
+				Foo string `di:"foo"`
 			}{},
 			assert: func(t *testing.T, v interface{}, err error) {
 				if err == nil {
